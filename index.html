@@ -2,33 +2,71 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Белос - Multiplayer Alpha</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    <title>Белос - Multiplayer Alpha 2</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Заменил CDN на более надежный (unpkg) -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    
+
     <style>
-        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Segoe UI', sans-serif; user-select: none; touch-action: none; }
-        #game-container { width: 100vw; height: 100vh; display: block; }
+        html, body { height: 100%; }
+        body {
+            margin: 0; overflow: hidden; background: #87CEEB;
+            font-family: 'Segoe UI', sans-serif; user-select: none;
+            touch-action: none; overscroll-behavior: none;
+        }
+        #game-container { width: 100%; height: 100%; display: block; }
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-        
-        #joystick-zone { position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px; pointer-events: auto; z-index: 10; }
+
+        /* === Джойстик (поднят над чат-баром, чтобы не мешали друг другу) === */
+        #joystick-zone {
+            position: absolute;
+            bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+            left: 20px;
+            width: 120px; height: 120px;
+            pointer-events: auto; z-index: 10;
+        }
         #joystick-base { width: 100%; height: 100%; background: rgba(255,255,255,0.3); border-radius: 50%; position: relative; border: 2px solid rgba(255,255,255,0.6); backdrop-filter: blur(4px); }
         #joystick-stick { width: 50px; height: 50px; background: rgba(255,255,255,0.9); border-radius: 50%; position: absolute; top: 33px; left: 33px; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
-        
-        #top-buttons { position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; pointer-events: auto; z-index: 10; }
-        .icon-btn { background: rgba(255,255,255,0.8); border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
-        
-        #chat-container { position: absolute; bottom: 30px; right: 20px; width: calc(100% - 180px); max-width: 350px; display: flex; gap: 10px; pointer-events: auto; z-index: 10; }
-        #chat-input { flex-grow: 1; padding: 12px; border-radius: 20px; border: none; background: rgba(255,255,255,0.9); outline: none; font-size: 16px; }
-        #btn-send { background: #007AFF; color: white; border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; cursor: pointer; }
 
+        /* === Счетчик игроков === */
+        #online-counter { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); left: 14px; background: rgba(0,0,0,0.6); color: white; padding: 10px 15px; border-radius: 20px; font-weight: bold; pointer-events: none; z-index: 10; font-size: 14px; }
+
+        #top-buttons { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); right: 14px; display: flex; gap: 10px; pointer-events: auto; z-index: 10; }
+        .icon-btn { background: rgba(255,255,255,0.8); border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+
+        /* === Чат-бар: всегда в пределах экрана, кнопка не может уехать === */
+        #chat-container {
+            position: absolute;
+            left: 10px; right: 10px;
+            bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+            max-width: 520px;
+            margin: 0 auto;
+            display: flex; gap: 8px; align-items: center;
+            pointer-events: auto; z-index: 10;
+        }
+        #chat-input { flex: 1 1 auto; min-width: 0; padding: 12px 16px; border-radius: 24px; border: none; background: rgba(255,255,255,0.95); outline: none; font-size: 16px; /* 16px — iOS не зумит поле */ box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
+        #btn-send { flex: 0 0 auto; width: 46px; height: 46px; background: #007AFF; color: white; border: none; border-radius: 50%; font-size: 20px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+
+        /* === Лента чата (видна даже если игрок за экраном) === */
+        #chat-feed {
+            position: absolute;
+            right: 10px;
+            bottom: calc(66px + env(safe-area-inset-bottom, 0px));
+            max-width: 300px;
+            display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+            pointer-events: none; z-index: 9;
+        }
+        .chat-line { background: rgba(0,0,0,0.55); color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 12px; max-width: 100%; word-wrap: break-word; transition: opacity 1.5s; }
+
+        /* === Метки над головами и облачка чата === */
+        #labels-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 5; }
+        .name-tag { position: absolute; transform: translate(-50%, -100%); background: rgba(0,0,0,0.55); color: #fff; padding: 2px 9px; border-radius: 10px; font-size: 11px; white-space: nowrap; pointer-events: none; }
         .speech-bubble { position: absolute; background: white; padding: 8px 12px; border-radius: 15px; font-size: 14px; color: #333; max-width: 200px; word-wrap: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transform: translate(-50%, -100%); pointer-events: none; border: 2px solid #007AFF; }
-        
+
+        /* === Модалка кастомизации === */
         .modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; pointer-events: auto; justify-content: center; align-items: center; }
-        .modal-content { background: white; padding: 20px; border-radius: 15px; width: 80%; max-width: 400px; }
+        .modal-content { background: white; padding: 20px; border-radius: 15px; width: 80%; max-width: 400px; max-height: 80vh; overflow-y: auto; }
         .custom-row { margin-bottom: 15px; }
         .color-btn { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #ccc; cursor: pointer; margin-right: 5px; display: inline-block; }
         .option-btn { padding: 5px 10px; margin: 2px; border: 1px solid #ccc; background: #f0f0f0; cursor: pointer; border-radius: 5px; }
@@ -38,18 +76,20 @@
 </head>
 <body>
     <div id="loading">Инициализация...</div>
+    <div id="online-counter">Игроков в сети: 0</div>
     <div id="game-container"></div>
-    
+
     <div id="ui-layer">
         <div id="joystick-zone"><div id="joystick-base"><div id="joystick-stick"></div></div></div>
-        <div id="top-buttons"><button class="icon-btn" id="btn-customize">🎩</button></div>
+        <div id="top-buttons"><button class="icon-btn" id="btn-customize" type="button">🎩</button></div>
         <div id="chat-container">
-            <input type="text" id="chat-input" placeholder="Сказать..." autocomplete="off">
-            <button id="btn-send">↑</button>
+            <input type="text" id="chat-input" placeholder="Сказать..." autocomplete="off" maxlength="120">
+            <button id="btn-send" type="button">↑</button>
         </div>
     </div>
 
-    <div id="bubbles-container" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:hidden;"></div>
+    <div id="labels-container"></div>
+    <div id="chat-feed"></div>
 
     <div class="modal" id="custom-modal">
         <div class="modal-content">
@@ -78,50 +118,80 @@
     </div>
 
     <script>
-        // === САМАЯ ПЕРВАЯ ПРОВЕРКА ===
+        // ============================================================
+        //  Белос — Multiplayer Alpha 2
+        //  Архитектура: identity -> three.js сцена -> supabase realtime -> ввод -> цикл
+        // ============================================================
+
         const loader = document.getElementById('loading');
+        const onlineCounter = document.getElementById('online-counter');
+        const labelsContainer = document.getElementById('labels-container');
+
         function addLog(msg) {
             loader.innerHTML += '<br><span style="color:#F1C40F; font-size:14px;">> ' + msg + '</span>';
-            console.log(msg);
+            console.log('[Bellos]', msg);
         }
         window.onerror = function(msg) { addLog('❌ ОШИБКА JS: ' + msg); };
-        
-        addLog('Скрипт запущен. Проверка библиотек...');
 
-        // === ВСТАВЬ СВОИ КЛЮЧИ СЮДА ===
-        const SUPABASE_URL = 'https://dwfwgikrrzavphhuxctq.supabase.co';
-        const SUPABASE_KEY = 'sb_publishable_UPFWyHXpGep5zsbdVHPvLQ_RHikbYna';
-
-        if (SUPABASE_URL.includes('ТВОЙ_ПРОЕКТ')) {
-            addLog("<span style='color:red;'>ТЫ НЕ ВСТАВИЛ URL И КЛЮЧ SUPABASE!</span>");
-        } else if (!window.supabase) {
-            addLog("<span style='color:red;'>БИБЛИОТЕКА SUPABASE НЕ ЗАГРУЗИЛАСЬ С CDN!</span>");
-        } else {
-            addLog('Библиотеки OK. Настройка Three.js...');
-            startGame();
-        }
+        // ---------- Конфиг ----------
+        const CONFIG = {
+            supabaseUrl: 'https://dwfwgikrrzavphhuxctq.supabase.co',
+            supabaseKey: 'sb_publishable_UPFWyHXpGep5zsbdVHPvLQ_RHikbYna',
+            channelName: 'bellos-world',
+            adminTgId: 123456,
+            moveSpeed: 5,          // юнитов в СЕКУНДУ (независимо от FPS)
+            sendInterval: 200,     // мс между broadcast'ами движения (~5 Гц — запас под лимиты Realtime)
+            trackInterval: 3000,   // мс между обновлениями presence (для новичков)
+            worldBound: 45,        // граница мира (земля 100x100)
+            houseCollisionR: 3.2,  // радиус коллизии с домом
+            chatCooldown: 600,     // мс антиспама чата
+            chatHistoryLimit: 15,  // сколько последних сообщений подгружать при входе
+            playerGraceMs: 3000    // сколько ждать перед удалением пропавшего игрока (анти-мерцание)
+        };
 
         function startGame() {
+            // ---------- Кто я ----------
             const tg = window.Telegram?.WebApp;
             if (tg) { tg.ready(); tg.expand(); }
-            const tgUser = tg?.initDataUnsafe?.user || { id: 123456, username: "Guest" };
-            const myId = tgUser.id;
-            const ADMIN_ID = 123456; // ВПИШИ СВОЙ ID
-            const isAdmin = myId === ADMIN_ID;
 
-            let supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            // Поддержка тестовых ID: ?testId=1 и ?testId=2 в двух вкладках одного ПК
+            const urlParams = new URLSearchParams(window.location.search);
+            const testId = urlParams.get('testId');
+            const tgUser = tg?.initDataUnsafe?.user;
 
-            // === THREE.JS ===
+            const myId = testId ? parseInt(testId, 10) : (tgUser?.id || Math.floor(100000 + Math.random() * 900000));
+            const myIdStr = String(myId);
+            const myName = tgUser?.username || ('Игрок_' + myIdStr.slice(-4));
+
+            let supabase = window.supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+
+            // ---------- THREE.JS: сцена ----------
             const container = document.getElementById('game-container');
             const scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x87CEEB); 
-            const camera = new THREE.OrthographicCamera(-15 * (window.innerWidth/window.innerHeight), 15 * (window.innerWidth/window.innerHeight), 15, -15, 1, 1000);
+            scene.background = new THREE.Color(0x87CEEB);
+            const camera = new THREE.OrthographicCamera(-15, 15, 15, -15, 1, 1000);
             camera.position.set(20, 20, 20);
 
             const renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             container.appendChild(renderer.domElement);
+
+            // Корректный resize: камера подстраивает фрустум под пропорции экрана.
+            // На вертикальном телефоне гарантируем минимальную ширину обзора, чтобы мир не «сжимался».
+            function onResize() {
+                const w = window.innerWidth, h = window.innerHeight;
+                const aspect = w / h;
+                let fh = 26; // высота фрустума
+                if ((fh / 2) * aspect < 12) fh = 24 / aspect; // узкий экран: расширяем обзор
+                camera.left = -fh * aspect / 2; camera.right = fh * aspect / 2;
+                camera.top = fh / 2; camera.bottom = -fh / 2;
+                camera.updateProjectionMatrix();
+                renderer.setSize(w, h);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            }
+            window.addEventListener('resize', onResize);
+            if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
+            onResize();
 
             scene.add(new THREE.AmbientLight(0xffffff, 0.6));
             const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -131,9 +201,10 @@
             const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x7CB342 }));
             ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 
-            const houses = [];
+            // 9 домов по кругу (сохраняем позиции для коллизий)
+            const housePositions = [];
             const houseColors = [0xE53935, 0x1E88E5, 0x43A047, 0xFDD835, 0x8E24AA, 0xFB8C00, 0x00ACC1, 0x6D4C41, 0xEC407A];
-            for(let i=0; i<9; i++) {
+            for (let i = 0; i < 9; i++) {
                 const angle = (i / 9) * Math.PI * 2;
                 const x = Math.cos(angle) * 18; const z = Math.sin(angle) * 18;
                 const hg = new THREE.Group();
@@ -141,14 +212,26 @@
                 const roof = new THREE.Mesh(new THREE.ConeGeometry(3.5, 2, 4), new THREE.MeshStandardMaterial({ color: houseColors[i] }));
                 roof.position.y = 2.5; roof.rotation.y = Math.PI / 4; roof.castShadow = true;
                 hg.children[0].position.y = 1.5; hg.children[0].castShadow = true;
-                hg.add(roof); hg.position.set(x, 0, z); scene.add(hg); houses.push(hg);
+                hg.add(roof); hg.position.set(x, 0, z); scene.add(hg);
+                housePositions.push({ x, z });
             }
 
+            // ---------- Персонажи (Funko Pop) ----------
             let myPlayer = null;
-            const otherPlayers = {};
-            let myData = { color: '#007AFF', hat: 'none', face: 'none' };
+            const otherPlayers = {};            // id -> { mesh, tag, targetPos, targetRot }
+            let myData = { color: '#007AFF', hat: 'none', face: 'none', isAdmin: false };
+            let channel = null;
+            let myTag = null;
+            let lastSyncAt = Date.now();        // время последнего presence sync (для самолечения)
 
-            function createFunkoPop(color, hat, face, isMe = false) {
+            // is_admin приходит из ДАННЫХ ИГРОКА (presence), а не из замыкания моего клиента —
+            // раньше корона админа «прилипала» ко всем чужим персонажам
+            function createFunkoPop(opts) {
+                const color = opts.color || '#007AFF';
+                const hat = opts.hat || 'none';
+                const face = opts.face || 'none';
+                const isAdmin = !!opts.isAdmin;
+
                 const group = new THREE.Group();
                 const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 1.2, 16), new THREE.MeshStandardMaterial({ color: color }));
                 body.position.y = 0.6; body.castShadow = true;
@@ -178,186 +261,490 @@
                 return group;
             }
 
-            let channel = null;
+            // ---------- Метки имен над головами ----------
+            function createLabel(text) {
+                const div = document.createElement('div');
+                div.className = 'name-tag';
+                div.innerText = text;
+                labelsContainer.appendChild(div);
+                return div;
+            }
+
+            // ---------- Supabase Realtime ----------
+            // ВАЖНО: subscribe() можно вызвать только ОДИН раз на экземпляр канала.
+            // При обрыве WS нельзя переиспользовать старый канал — пересоздаём целиком.
+            let reconnectScheduled = false;
+            let chatChannel = null;
+            function connectChannel() {
+                reconnectScheduled = false;
+                channel = supabase.channel(CONFIG.channelName, { config: { presence: { key: myIdStr } } });
+
+                channel.on('presence', { event: 'sync' }, onPresenceSync);
+                channel.on('broadcast', { event: 'move' }, onMoveReceived);
+                channel.on('broadcast', { event: 'chat' }, onChatReceived);
+
+                channel.subscribe((status) => {
+                    addLog('Статус WS: ' + status);
+                    if (status === 'SUBSCRIBED') {
+                        loader.style.display = 'none';
+                        sendTrack(true); // сразу анонсируем себя
+                        loadChatHistory();
+                    }
+                    if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
+                        if (reconnectScheduled) return; // не планируем два реконнекта параллельно
+                        reconnectScheduled = true;
+                        addLog('Переподключение через 3с...');
+                        setTimeout(() => {
+                            try {
+                                supabase.removeChannel(channel); // старый канал мёртв, вычищаем
+                                connectChannel();
+                                connectChatChannel();
+                            } catch (e) {
+                                addLog('❌ Реконнект: ' + e.message);
+                                reconnectScheduled = false;
+                            }
+                        }, 3000);
+                    }
+                });
+            }
+
+            // Отдельный канал под чат-БД: если таблицы messages ещё нет,
+            // никакие проблемы этого канала не заденут движение и presence
+            function connectChatChannel() {
+                try { if (chatChannel) supabase.removeChannel(chatChannel); } catch (_) {}
+                chatChannel = supabase.channel('bellos-chat');
+                chatChannel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, onDbMessage);
+                chatChannel.subscribe(() => {}); // статус не критичен: без БД работает fallback-broadcast
+            }
+
+            // ---------- Самолечение соединения ----------
+            // Фон-вкладка / свёрнутое приложение теряет WebSocket (heartbeat не проходит).
+            // Когда игрок возвращается в игру — проверяем связь и при необходимости пересоздаём канал.
+            function healConnection(reason) {
+                if (!channel || !myPlayer) return;
+                lastSyncAt = Date.now();
+                addLog('Восстанавливаю соединение (' + reason + ')...');
+                try { supabase.removeChannel(channel); } catch (_) {}
+                connectChannel();
+                connectChatChannel();
+            }
+
+            // Раз в 4 секунды: если игра видима, но sync давно не приходил — связь мертва
+            setInterval(() => {
+                if (document.visibilityState === 'visible' && Date.now() - lastSyncAt > 8000) {
+                    healConnection('нет sync > 8с');
+                }
+            }, 4000);
+
+            // Возврат на вкладку/в приложение
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && Date.now() - lastSyncAt > 5000) {
+                    healConnection('возврат на вкладку');
+                }
+            });
+
             async function initMultiplayer() {
                 try {
-                    addLog('Запрос к базе данных (ID: ' + myId + ')...');
+                    addLog('Поиск профиля в БД...');
                     let { data: profile, error } = await supabase.from('profiles').select('*').eq('tg_id', myId).maybeSingle();
-                    
                     if (error) throw new Error(error.message);
 
                     if (!profile) {
-                        addLog('Создание профиля...');
-                        const { data: newProfile, error: insErr } = await supabase.from('profiles').insert([{ 
-                            tg_id: myId, username: tgUser.username || 'Player', is_admin: isAdmin
+                        addLog('Профиль не найден, создаю...');
+                        const { data: created, error: insErr } = await supabase.from('profiles').insert([{
+                            tg_id: myId, username: myName, is_admin: (myId === CONFIG.adminTgId)
                         }]).select().single();
                         if (insErr) throw new Error(insErr.message);
-                        profile = newProfile;
-                    } else {
-                        addLog('Профиль найден.');
+                        profile = created;
                     }
 
-                    myData = { color: profile.body_color || '#007AFF', hat: profile.hat_type || 'none', face: profile.face_type || 'none' };
-                    myPlayer = createFunkoPop(myData.color, myData.hat, myData.face, true);
+                    myData.color = profile.body_color || '#007AFF';
+                    myData.hat = profile.hat_type || 'none';
+                    myData.face = profile.face_type || 'none';
+                    myData.isAdmin = !!(profile.is_admin || myId === CONFIG.adminTgId);
+
+                    myPlayer = createFunkoPop(myData);
                     scene.add(myPlayer);
+                    myTag = createLabel(myName + (myData.isAdmin ? ' 👑' : ''));
+                    addLog('Профиль загружен' + (myData.isAdmin ? ' (админ)' : ''));
 
-                    addLog('Подключение к WebSocket (Realtime)...');
-                    channel = supabase.channel('bellos-world', { config: { presence: { key: String(myId) } } });
-
-                    channel.on('presence', { event: 'sync' }, () => {
-                        const state = channel.presenceState();
-                        for (let id in otherPlayers) {
-                            if (!state[id]) { scene.remove(otherPlayers[id].mesh); delete otherPlayers[id]; }
-                        }
-                        for (let id in state) {
-                            if (id != String(myId) && !otherPlayers[id]) {
-                                const p = state[id][0];
-                                const mesh = createFunkoPop(p.color || '#007AFF', p.hat || 'none', p.face || 'none');
-                                mesh.position.set(p.x || 0, 0, p.z || 0);
-                                scene.add(mesh);
-                                otherPlayers[id] = { mesh, targetPos: new THREE.Vector3(p.x || 0, 0, p.z || 0) };
-                            }
-                        }
-                    });
-
-                    channel.on('broadcast', { event: 'move' }, payload => {
-                        if (otherPlayers[payload.id]) otherPlayers[payload.id].targetPos.set(payload.x, 0, payload.z);
-                    });
-
-                    channel.on('broadcast', { event: 'chat' }, payload => {
-                        if (payload.id != String(myId) && otherPlayers[payload.id]) showBubble(otherPlayers[payload.id].mesh, payload.text);
-                    });
-
-                    const timeout = setTimeout(() => addLog('❌ ТАЙМАУТ WS! Включен ли Realtime в Supabase?'), 8000);
-
-                    await channel.subscribe(async (status) => {
-                        addLog('Статус: ' + status);
-                        if (status === 'SUBSCRIBED') {
-                            clearTimeout(timeout);
-                            await channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
-                            addLog('✅ Игра готова!');
-                            setTimeout(() => { loader.style.display = 'none'; }, 1000);
-                        }
-                    });
+                    connectChannel();
+                    connectChatChannel();
                 } catch (e) {
-                    addLog('❌ ОШИБКА: ' + e.message);
+                    addLog('❌ ОШИБКА БД: ' + e.message);
+                    setTimeout(() => { loader.style.display = 'none'; }, 5000);
                 }
             }
 
-            // Управление (сокращено для читаемости, но работает полностью)
+            // Presence = «кто в сети» + метаданные + позиция-фолбэк для новичков.
+            // Движение в реальном времени — через broadcast (~10 Гц), presence — 1 Гц.
+            function onPresenceSync() {
+                if (!channel) return;
+                lastSyncAt = Date.now();
+                const state = channel.presenceState();
+                onlineCounter.innerText = 'Игроков в сети: ' + Object.keys(state).length;
+
+                // 1) пропавших не удаляем мгновенно: короткий обрыв не должен заставать
+                //    персонажа исчезать и появляться (мерцание). Даём 3 секунды grace.
+                for (const id of Object.keys(otherPlayers)) {
+                    if (!state[id]) {
+                        const p = otherPlayers[id];
+                        if (!p.removeTimer) {
+                            p.removeTimer = setTimeout(() => {
+                                scene.remove(p.mesh);
+                                p.tag.remove();
+                                delete otherPlayers[id];
+                            }, CONFIG.playerGraceMs);
+                        }
+                    }
+                }
+                // 2) добавляем новых; если разошлись далеко (пропущенные пакеты) — подтягиваем по presence
+                for (const id of Object.keys(state)) {
+                    if (id === myIdStr) continue;
+                    const meta = state[id][0];
+                    if (!meta) continue;
+
+                    if (otherPlayers[id] && otherPlayers[id].removeTimer) {
+                        clearTimeout(otherPlayers[id].removeTimer);
+                        otherPlayers[id].removeTimer = null;
+                    }
+
+                    if (!otherPlayers[id]) {
+                        const mesh = createFunkoPop({ color: meta.color, hat: meta.hat, face: meta.face, isAdmin: meta.is_admin });
+                        mesh.position.set(meta.x || 0, 0, meta.z || 0);
+                        scene.add(mesh);
+                        const tag = createLabel(meta.username || ('Игрок_' + id.slice(-4)));
+                        otherPlayers[id] = {
+                            mesh, tag,
+                            targetPos: new THREE.Vector3(meta.x || 0, 0, meta.z || 0),
+                            targetRot: meta.rot || 0
+                        };
+                        addLog('Зашел игрок: ' + (meta.username || id));
+                    } else {
+                        const p = otherPlayers[id];
+                        const dx = (meta.x || 0) - p.targetPos.x;
+                        const dz = (meta.z || 0) - p.targetPos.z;
+                        if (Math.sqrt(dx * dx + dz * dz) > 4) p.targetPos.set(meta.x || 0, 0, meta.z || 0);
+                    }
+                }
+            }
+
+            function onMoveReceived({ payload }) {
+                const p = otherPlayers[payload.id];
+                if (!p) return; // игрока ещё нет — позиция придёт через presence sync
+                p.targetPos.set(payload.x, 0, payload.z);
+                p.targetRot = payload.rot || 0;
+            }
+
+            // Fallback-путь чата (если БД недоступна). Привязаны к id игрока,
+            // а не к мешу (меш пересоздаётся при смене шляпы/лица)
+            function onChatReceived({ payload }) {
+                if (payload.id === myIdStr) return;
+                addFeedLine(payload.username || 'Игрок', payload.text);
+                showBubble(payload.id, payload.text);
+            }
+
+            // Основной путь чата: INSERT в таблицу messages через postgres_changes
+            const shownMsgIds = new Set();
+            function onDbMessage({ payload: msg }) {
+                if (!msg || String(msg.player_id) === myIdStr) return;
+                if (msg.id != null) {
+                    if (shownMsgIds.has(msg.id)) return;
+                    shownMsgIds.add(msg.id);
+                }
+                addFeedLine(msg.username || 'Игрок', msg.text);
+                showBubble(String(msg.player_id), msg.text);
+            }
+
+            // История последних сообщений — подгружается при каждом подключении
+            async function loadChatHistory() {
+                try {
+                    const { data, error } = await supabase.from('messages')
+                        .select('id,player_id,username,text')
+                        .order('id', { ascending: false })
+                        .limit(CONFIG.chatHistoryLimit);
+                    if (error || !data) return; // таблицы ещё нет — чат работает через fallback
+                    data.reverse().forEach(m => {
+                        if (m.id != null) {
+                            if (shownMsgIds.has(m.id)) return;
+                            shownMsgIds.add(m.id);
+                        }
+                        addFeedLine(m.username || 'Игрок', m.text);
+                    });
+                } catch (_) { /* чат работает через fallback */ }
+            }
+
+            // Отправка presence-данных (не чаще 1 Гц)
+            let lastTrackSent = 0;
+            function sendTrack(force) {
+                if (!channel || !myPlayer) return;
+                const now = Date.now();
+                if (!force && now - lastTrackSent < CONFIG.trackInterval) return;
+                lastTrackSent = now;
+                channel.track({
+                    x: +myPlayer.position.x.toFixed(2),
+                    z: +myPlayer.position.z.toFixed(2),
+                    rot: +myPlayer.rotation.y.toFixed(2),
+                    username: myName,
+                    color: myData.color, hat: myData.hat, face: myData.face,
+                    is_admin: myData.isAdmin
+                });
+            }
+
+            // Отправка движения (~10 Гц, только если реально сдвинулись/повернулись)
+            let lastMoveSent = 0;
+            let lastSentPos = { x: 0, z: 0, rot: 0 };
+            function sendMove() {
+                if (!channel || !myPlayer) return;
+                const now = Date.now();
+                const moved = Math.abs(myPlayer.position.x - lastSentPos.x) > 0.01
+                           || Math.abs(myPlayer.position.z - lastSentPos.z) > 0.01
+                           || Math.abs(myPlayer.rotation.y - lastSentPos.rot) > 0.01;
+                if (!moved && now - lastMoveSent < 1000) return; // раз в секунду — heartbeat для новичков
+                if (now - lastMoveSent < CONFIG.sendInterval) return;
+                lastMoveSent = now;
+                lastSentPos = { x: myPlayer.position.x, z: myPlayer.position.z, rot: myPlayer.rotation.y };
+                channel.send({
+                    type: 'broadcast', event: 'move',
+                    payload: { id: myIdStr, x: +myPlayer.position.x.toFixed(2), z: +myPlayer.position.z.toFixed(2), rot: +myPlayer.rotation.y.toFixed(2) }
+                });
+            }
+
+            // ---------- Ввод: клавиатура ----------
+            const chatInput = document.getElementById('chat-input');
+            const isTyping = () => document.activeElement === chatInput;
+
             const keys = { w: false, a: false, s: false, d: false };
-            let joystickVec = new THREE.Vector2(0, 0);
-            
             window.addEventListener('keydown', (e) => {
-                if (e.key === 'w' || e.key === 'ArrowUp') keys.w = true;
-                if (e.key === 's' || e.key === 'ArrowDown') keys.s = true;
-                if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = true;
-                if (e.key === 'd' || e.key === 'ArrowRight') keys.d = true;
+                if (isTyping()) {
+                    if (e.key === 'Enter') sendChat();
+                    return; // пока печатаем — WASD не двигает персонажа (раньше было иначе)
+                }
+                if (e.key === 'w' || e.key === 'ц' || e.key === 'ArrowUp') keys.w = true;
+                if (e.key === 's' || e.key === 'ы' || e.key === 'ArrowDown') keys.s = true;
+                if (e.key === 'a' || e.key === 'ф' || e.key === 'ArrowLeft') keys.a = true;
+                if (e.key === 'd' || e.key === 'в' || e.key === 'ArrowRight') keys.d = true;
             });
             window.addEventListener('keyup', (e) => {
-                if (e.key === 'w' || e.key === 'ArrowUp') keys.w = false;
-                if (e.key === 's' || e.key === 'ArrowDown') keys.s = false;
-                if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = false;
-                if (e.key === 'd' || e.key === 'ArrowRight') keys.d = false;
+                if (e.key === 'w' || e.key === 'ц' || e.key === 'ArrowUp') keys.w = false;
+                if (e.key === 's' || e.key === 'ы' || e.key === 'ArrowDown') keys.s = false;
+                if (e.key === 'a' || e.key === 'ф' || e.key === 'ArrowLeft') keys.a = false;
+                if (e.key === 'd' || e.key === 'в' || e.key === 'ArrowRight') keys.d = false;
             });
 
+            // ---------- Ввод: джойстик (с захватом указателя, не боится второго пальца) ----------
             const zone = document.getElementById('joystick-zone');
             const stick = document.getElementById('joystick-stick');
-            let isDragging = false;
-            zone.addEventListener('pointerdown', (e) => { isDragging = true; updateStick(e); });
-            document.addEventListener('pointermove', (e) => { if (isDragging) updateStick(e); });
-            document.addEventListener('pointerup', () => { isDragging = false; stick.style.transform = `translate(0,0)`; joystickVec.set(0,0); });
+            let joystickVec = new THREE.Vector2(0, 0);
+            let joystickPointerId = null;
+
+            zone.addEventListener('pointerdown', (e) => {
+                joystickPointerId = e.pointerId;
+                try { zone.setPointerCapture(e.pointerId); } catch (_) {}
+                updateStick(e);
+            });
+            zone.addEventListener('pointermove', (e) => { if (e.pointerId === joystickPointerId) updateStick(e); });
+            const endStick = (e) => {
+                if (e.pointerId !== joystickPointerId) return;
+                joystickPointerId = null;
+                stick.style.transform = 'translate(0,0)';
+                joystickVec.set(0, 0);
+            };
+            zone.addEventListener('pointerup', endStick);
+            zone.addEventListener('pointercancel', endStick);
+
             function updateStick(e) {
                 const rect = zone.getBoundingClientRect();
-                let dx = e.clientX - (rect.left + rect.width/2); let dy = e.clientY - (rect.top + rect.height/2);
-                const dist = Math.sqrt(dx*dx + dy*dy); const max = 35;
-                if (dist > max) { dx = (dx/dist)*max; dy = (dy/dist)*max; }
+                let dx = e.clientX - (rect.left + rect.width / 2);
+                let dy = e.clientY - (rect.top + rect.height / 2);
+                const dist = Math.hypot(dx, dy); const max = 35;
+                if (dist > max) { dx = (dx / dist) * max; dy = (dy / dist) * max; }
                 stick.style.transform = `translate(${dx}px, ${dy}px)`;
-                joystickVec.set(dx/max, dy/max);
+                joystickVec.set(dx / max, dy / max);
             }
 
-            let activeBubbles = [];
-            function showBubble(targetObj, text) {
+            // ---------- Чат ----------
+            let activeBubbles = []; // { div, playerId, life }
+            function showBubble(playerId, text) {
                 const div = document.createElement('div');
-                div.className = `speech-bubble`;
+                div.className = 'speech-bubble';
                 div.innerText = text;
-                document.getElementById('bubbles-container').appendChild(div);
-                activeBubbles.push({ div, targetObj, life: 4.0 });
+                labelsContainer.appendChild(div);
+                activeBubbles.push({ div, playerId, life: 4.5 });
             }
-            document.getElementById('btn-send').addEventListener('click', () => {
-                const input = document.getElementById('chat-input');
-                if (input.value.trim() !== '' && channel && myPlayer) {
-                    const text = input.value.trim();
-                    showBubble(myPlayer, text);
-                    channel.send({ type: 'broadcast', event: 'chat', payload: { id: String(myId), text: text } });
-                    input.value = '';
-                }
-            });
 
+            // ---------- Лента чата (низ экрана, видна всегда) ----------
+            function escapeHtml(s) {
+                return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            }
+            function addFeedLine(name, text) {
+                if (!text) return;
+                const feed = document.getElementById('chat-feed');
+                const div = document.createElement('div');
+                div.className = 'chat-line';
+                div.innerHTML = '<b>' + escapeHtml(name) + ':</b> ' + escapeHtml(text);
+                feed.appendChild(div);
+                while (feed.children.length > 5) feed.firstChild.remove();
+                setTimeout(() => { div.style.opacity = '0'; }, 8000);
+                setTimeout(() => { div.remove(); }, 10000);
+            }
+
+            let lastChatAt = 0;
+            async function sendChat() {
+                const text = chatInput.value.trim();
+                if (!text || !myPlayer) return;
+                const now = Date.now();
+                if (now - lastChatAt < CONFIG.chatCooldown) return; // легкий антиспам
+                lastChatAt = now;
+
+                showBubble(myIdStr, text);
+                addFeedLine(myName, text);
+
+                // Основной путь — в БД (надёжно, с историей). Не вышло — fallback на broadcast.
+                try {
+                    const { error } = await supabase.from('messages').insert({ player_id: myId, username: myName, text });
+                    if (error) throw new Error(error.message);
+                } catch (_) {
+                    if (channel) channel.send({ type: 'broadcast', event: 'chat', payload: { id: myIdStr, username: myName, text } });
+                }
+
+                chatInput.value = '';
+                chatInput.blur(); // на мобилке закрываем клавиатуру после отправки
+            }
+            document.getElementById('btn-send').addEventListener('click', sendChat);
+            chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendChat(); } });
+
+            // ---------- Проекция 3D -> экран ----------
+            function projectToScreen(obj, yOff) {
+                const v = obj.position.clone(); v.y += yOff; v.project(camera);
+                return {
+                    x: (v.x * 0.5 + 0.5) * window.innerWidth,
+                    y: (-v.y * 0.5 + 0.5) * window.innerHeight,
+                    visible: v.z < 1
+                };
+            }
+
+            function shortestAngle(a) { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }
+
+            // ---------- Игровой цикл ----------
             const clock = new THREE.Clock();
-            let lastBroadcast = 0;
             function animate() {
                 requestAnimationFrame(animate);
-                const delta = clock.getDelta();
+                const delta = Math.min(clock.getDelta(), 0.1); // клампим рывки при сворачивании вкладки
+                const lerpK = 1 - Math.exp(-12 * delta);       // интерполяция, независимая от FPS
 
                 if (myPlayer) {
-                    let moveX = 0; let moveZ = 0;
-                    if (keys.w) moveZ -= 1; if (keys.s) moveZ += 1;
-                    if (keys.a) moveX -= 1; if (keys.d) moveX += 1;
-                    if (joystickVec.length() > 0.1) { moveX = joystickVec.x; moveZ = joystickVec.y; }
+                    // --- мой ввод ---
+                    let mx = 0, mz = 0;
+                    if (!isTyping()) {
+                        if (keys.w) mz -= 1; if (keys.s) mz += 1;
+                        if (keys.a) mx -= 1; if (keys.d) mx += 1;
+                        if (joystickVec.length() > 0.12) { mx = joystickVec.x; mz = joystickVec.y; }
+                    }
+                    const len = Math.hypot(mx, mz);
+                    if (len > 0.01) {
+                        mx /= Math.max(len, 1); mz /= Math.max(len, 1);
+                        myPlayer.position.x += mx * CONFIG.moveSpeed * delta; // скорость * delta: одинакова на 60 и 120 Гц
+                        myPlayer.position.z += mz * CONFIG.moveSpeed * delta;
 
-                    const isMoving = moveX !== 0 || moveZ !== 0;
-                    if (isMoving) {
-                        const len = Math.sqrt(moveX*moveX + moveZ*moveZ);
-                        myPlayer.position.x += (moveX/len) * 0.15;
-                        myPlayer.position.z += (moveZ/len) * 0.15;
-                        myPlayer.rotation.y = Math.atan2(moveX, moveZ);
+                        // плавный поворот в сторону движения
+                        const targetRot = Math.atan2(mx, mz);
+                        myPlayer.rotation.y += shortestAngle(targetRot - myPlayer.rotation.y) * Math.min(1, 14 * delta);
+
+                        // границы мира
+                        myPlayer.position.x = THREE.MathUtils.clamp(myPlayer.position.x, -CONFIG.worldBound, CONFIG.worldBound);
+                        myPlayer.position.z = THREE.MathUtils.clamp(myPlayer.position.z, -CONFIG.worldBound, CONFIG.worldBound);
+
+                        // коллизии с домами (выталкивание)
+                        for (const hp of housePositions) {
+                            const dx = myPlayer.position.x - hp.x, dz = myPlayer.position.z - hp.z;
+                            const d = Math.hypot(dx, dz);
+                            if (d < CONFIG.houseCollisionR && d > 0.001) {
+                                myPlayer.position.x = hp.x + (dx / d) * CONFIG.houseCollisionR;
+                                myPlayer.position.z = hp.z + (dz / d) * CONFIG.houseCollisionR;
+                            }
+                        }
+
+                        // лёгкое покачивание при ходьбе
+                        myPlayer.position.y = Math.abs(Math.sin(performance.now() / 90)) * 0.09;
+                    } else {
+                        myPlayer.position.y = 0;
                     }
 
-                    if (Date.now() - lastBroadcast > 100 && channel) {
-                        channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
-                        channel.send({ type: 'broadcast', event: 'move', payload: { id: String(myId), x: myPlayer.position.x, z: myPlayer.position.z } });
-                        lastBroadcast = Date.now();
-                    }
+                    sendMove();
+                    sendTrack(false);
 
-                    camera.position.x = myPlayer.position.x + 20;
-                    camera.position.z = myPlayer.position.z + 20;
+                    // --- камера следует за игроком ---
+                    camera.position.set(myPlayer.position.x + 20, 20, myPlayer.position.z + 20);
                     camera.lookAt(myPlayer.position.x, 1, myPlayer.position.z);
                 }
 
-                for (let id in otherPlayers) otherPlayers[id].mesh.position.lerp(otherPlayers[id].targetPos, 0.1);
+                // --- чужие игроки: позиция + поворот интерполируются ---
+                for (const id in otherPlayers) {
+                    const p = otherPlayers[id];
+                    p.mesh.position.x += (p.targetPos.x - p.mesh.position.x) * lerpK;
+                    p.mesh.position.z += (p.targetPos.z - p.mesh.position.z) * lerpK;
+                    p.mesh.rotation.y += shortestAngle(p.targetRot - p.mesh.rotation.y) * lerpK;
+                }
 
+                // --- метки имен ---
+                if (myTag && myPlayer) {
+                    const s = projectToScreen(myPlayer, 2.55);
+                    myTag.style.left = s.x + 'px'; myTag.style.top = s.y + 'px';
+                    myTag.style.display = s.visible ? 'block' : 'none';
+                }
+                for (const id in otherPlayers) {
+                    const tag = otherPlayers[id].tag;
+                    const s = projectToScreen(otherPlayers[id].mesh, 2.55);
+                    tag.style.left = s.x + 'px'; tag.style.top = s.y + 'px';
+                    tag.style.display = s.visible ? 'block' : 'none';
+                }
+
+                // --- облачка чата (живут по playerId, переживают пересоздание меша) ---
                 for (let i = activeBubbles.length - 1; i >= 0; i--) {
                     const b = activeBubbles[i];
                     b.life -= delta;
                     if (b.life <= 0) { b.div.remove(); activeBubbles.splice(i, 1); continue; }
-                    const pos = b.targetObj.position.clone(); pos.y += 2.8; pos.project(camera);
-                    b.div.style.left = `${(pos.x * 0.5 + 0.5) * window.innerWidth}px`;
-                    b.div.style.top = `${(-(pos.y * 0.5) + 0.5) * window.innerHeight}px`;
+                    const target = (b.playerId === myIdStr) ? myPlayer : (otherPlayers[b.playerId] ? otherPlayers[b.playerId].mesh : null);
+                    if (!target) { b.div.remove(); activeBubbles.splice(i, 1); continue; }
+                    const s = projectToScreen(target, 3.15);
+                    b.div.style.left = s.x + 'px'; b.div.style.top = s.y + 'px';
+                    b.div.style.display = s.visible ? 'block' : 'none';
                 }
 
                 renderer.render(scene, camera);
             }
 
+            // ---------- Кастомизация ----------
+            function rebuildMyPlayer() {
+                const pos = myPlayer.position.clone();
+                const rot = myPlayer.rotation.y;
+                scene.remove(myPlayer);
+                myPlayer = createFunkoPop(myData);
+                myPlayer.position.copy(pos);
+                myPlayer.rotation.y = rot;
+                scene.add(myPlayer);
+            }
+
             window.changeColor = async (color) => {
-                myData.color = color; myPlayer.userData.body.material.color.set(color);
-                if(channel) channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
+                if (!myPlayer) return;
+                myData.color = color;
+                myPlayer.userData.body.material.color.set(color);
+                sendTrack(true);
                 await supabase.from('profiles').update({ body_color: color }).eq('tg_id', myId);
             };
             window.changeHat = async (hat) => {
-                myData.hat = hat; scene.remove(myPlayer);
-                const pos = myPlayer.position.clone();
-                myPlayer = createFunkoPop(myData.color, myData.hat, myData.face, true);
-                myPlayer.position.copy(pos); scene.add(myPlayer);
-                if(channel) channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
+                if (!myPlayer) return;
+                myData.hat = hat;
+                rebuildMyPlayer();
+                sendTrack(true);
                 await supabase.from('profiles').update({ hat_type: hat }).eq('tg_id', myId);
             };
             window.changeFace = async (face) => {
-                myData.face = face; scene.remove(myPlayer);
-                const pos = myPlayer.position.clone();
-                myPlayer = createFunkoPop(myData.color, myData.hat, myData.face, true);
-                myPlayer.position.copy(pos); scene.add(myPlayer);
-                if(channel) channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
+                if (!myPlayer) return;
+                myData.face = face;
+                rebuildMyPlayer();
+                sendTrack(true);
                 await supabase.from('profiles').update({ face_type: face }).eq('tg_id', myId);
             };
 
@@ -365,9 +752,20 @@
                 document.getElementById('custom-modal').style.display = 'flex';
             });
 
+            // ---------- Старт ----------
             animate();
             initMultiplayer();
+
+            // Отладочный хук (пригодится для тестов и консоли)
+            window.__bellos = {
+                get me() { return myPlayer; },
+                get others() { return otherPlayers; },
+                get channel() { return channel; },
+                get myId() { return myIdStr; }
+            };
         }
+
+        startGame();
     </script>
 </body>
 </html>
