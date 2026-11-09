@@ -13,38 +13,30 @@
         #game-container { width: 100vw; height: 100vh; display: block; }
         #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
         
-        /* Джойстик */
         #joystick-zone { position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px; pointer-events: auto; z-index: 10; }
         #joystick-base { width: 100%; height: 100%; background: rgba(255,255,255,0.3); border-radius: 50%; position: relative; border: 2px solid rgba(255,255,255,0.6); backdrop-filter: blur(4px); }
         #joystick-stick { width: 50px; height: 50px; background: rgba(255,255,255,0.9); border-radius: 50%; position: absolute; top: 33px; left: 33px; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
         
-        /* Кнопки UI */
         #top-buttons { position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; pointer-events: auto; z-index: 10; }
         .icon-btn { background: rgba(255,255,255,0.8); border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
         
-        /* Чат */
         #chat-container { position: absolute; bottom: 30px; right: 20px; width: calc(100% - 180px); max-width: 350px; display: flex; gap: 10px; pointer-events: auto; z-index: 10; }
         #chat-input { flex-grow: 1; padding: 12px; border-radius: 20px; border: none; background: rgba(255,255,255,0.9); outline: none; font-size: 16px; }
         #btn-send { background: #007AFF; color: white; border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; cursor: pointer; }
 
-        /* Облачка */
         .speech-bubble { position: absolute; background: white; padding: 8px 12px; border-radius: 15px; font-size: 14px; color: #333; max-width: 200px; word-wrap: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transform: translate(-50%, -100%); pointer-events: none; border: 2px solid #007AFF; }
-        .speech-bubble.npc-bubble { border-color: #FF3B30; }
         
-        /* Модалки */
         .modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; pointer-events: auto; justify-content: center; align-items: center; }
         .modal-content { background: white; padding: 20px; border-radius: 15px; width: 80%; max-width: 400px; }
         .custom-row { margin-bottom: 15px; }
         .color-btn { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #ccc; cursor: pointer; margin-right: 5px; display: inline-block; }
         .option-btn { padding: 5px 10px; margin: 2px; border: 1px solid #ccc; background: #f0f0f0; cursor: pointer; border-radius: 5px; }
 
-        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; color: white; font-weight: bold; z-index: 200; text-align: center; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; }
-        #error-box { display: none; position: absolute; top: 10px; left: 10px; right: 10px; background: rgba(255, 0, 0, 0.9); color: white; padding: 15px; border-radius: 8px; z-index: 999; white-space: pre-wrap; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 18px; color: white; font-weight: bold; z-index: 200; text-align: left; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; width: 80%; max-width: 400px; word-break: break-all; }
     </style>
 </head>
 <body>
-    <div id="error-box"></div>
-    <div id="loading">Загрузка Белоса...</div>
+    <div id="loading">Инициализация...</div>
     <div id="game-container"></div>
     
     <div id="ui-layer">
@@ -58,7 +50,6 @@
 
     <div id="bubbles-container" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:hidden;"></div>
 
-    <!-- Модалка кастомизации -->
     <div class="modal" id="custom-modal">
         <div class="modal-content">
             <h3>Смешная кастомизация</h3>
@@ -87,37 +78,38 @@
 
     <script>
         // === ВСТАВЬ СВОИ КЛЮЧИ СЮДА ===
-        const SUPABASE_URL = 'https://dwfwgikrrzavphhuxctq.supabase.co';
-        const SUPABASE_KEY = 'sb_secret_w_ATzad0wwkYyvYP-nYUfA_sOGWknyg';
+        const SUPABASE_URL = 'https://ТВОЙ_ПРОЕКТ.supabase.co';
+        const SUPABASE_KEY = 'ТВОЙ_ANON_KEY';
 
-        // Отладка на экране
-        window.onerror = function(msg) {
-            const err = document.getElementById('error-box');
-            err.style.display = 'block';
-            err.innerText = 'ОШИБКА: ' + msg;
-            document.getElementById('loading').style.display = 'none';
-        };
+        const loader = document.getElementById('loading');
+        function addLog(msg) {
+            loader.innerHTML += '<br><span style="color:#F1C40F; font-size:14px;">> ' + msg + '</span>';
+            console.log(msg);
+        }
+
+        // Перехват любых ошибок
+        window.onerror = function(msg) { addLog('❌ JS ОШИБКА: ' + msg); };
+        window.addEventListener('unhandledrejection', function(e) { addLog('❌ PROMISE: ' + e.reason); });
+
+        // Проверка ключей
+        if (SUPABASE_URL.includes('ТВОЙ_ПРОЕКТ') || SUPABASE_KEY.includes('ТВОЙ_ANON_KEY')) {
+            loader.innerHTML = "<span style='color:red;'>ТЫ НЕ ВСТАВИЛ КЛЮЧИ SUPABASE В КОД!</span>";
+            throw new Error("Нет ключей");
+        }
 
         const tg = window.Telegram?.WebApp;
         if (tg) { tg.ready(); tg.expand(); }
         const tgUser = tg?.initDataUnsafe?.user || { id: 123456, username: "Guest" };
-        
         const myId = tgUser.id;
-        const ADMIN_ID = 1041188721; // ВПИШИ СВОЙ ID
+        const ADMIN_ID = 123456; // ВПИШИ СВОЙ ID
         const isAdmin = myId === ADMIN_ID;
 
-        let supabase = null;
-        if (SUPABASE_URL.includes('ТВОЙ_ПРОЕКТ')) {
-            document.getElementById('loading').innerText = "ОШИБКА: Вставь ключи Supabase в код!";
-        } else {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        }
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         // === THREE.JS ===
         const container = document.getElementById('game-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB); 
-        scene.fog = new THREE.Fog(0x87CEEB, 30, 80); 
         const camera = new THREE.OrthographicCamera(-15 * (window.innerWidth/window.innerHeight), 15 * (window.innerWidth/window.innerHeight), 15, -15, 1, 1000);
         camera.position.set(20, 20, 20);
 
@@ -134,7 +126,6 @@
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x7CB342 }));
         ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 
-        // Дома
         const houses = [];
         const houseColors = [0xE53935, 0x1E88E5, 0x43A047, 0xFDD835, 0x8E24AA, 0xFB8C00, 0x00ACC1, 0x6D4C41, 0xEC407A];
         for(let i=0; i<9; i++) {
@@ -148,7 +139,6 @@
             hg.add(roof); hg.position.set(x, 0, z); scene.add(hg); houses.push(hg);
         }
 
-        // Персонажи
         let myPlayer = null;
         const otherPlayers = {};
         let myData = { color: '#007AFF', hat: 'none', face: 'none' };
@@ -183,31 +173,34 @@
             return group;
         }
 
-        // === МУЛЬТИПЛЕЕР ===
+        // === МУЛЬТИПЛЕЕР С ДИАГНОСТИКОЙ ===
         let channel = null;
         async function initMultiplayer() {
-            if (!supabase) return;
-
             try {
-                document.getElementById('loading').innerText = "Подключение к БД...";
-                let { data: profile, error } = await supabase.from('profiles').select('*').eq('tg_id', myId).single();
+                addLog('1. Запрос профиля из БД... (TG ID: ' + myId + ')');
+                let { data: profile, error } = await supabase.from('profiles').select('*').eq('tg_id', myId).maybeSingle();
                 
-                if (error && error.code !== 'PGRST116') throw new Error("Ошибка БД: " + error.message);
+                if (error) throw new Error("БД SELECT: " + error.message);
 
                 if (!profile) {
+                    addLog('2. Профиль не найден, создаем новый...');
                     const { data: newProfile, error: insErr } = await supabase.from('profiles').insert([{ 
                         tg_id: myId, username: tgUser.username || 'Player', is_admin: isAdmin
                     }]).select().single();
-                    if (insErr) throw new Error("Ошибка создания профиля: " + insErr.message);
+                    if (insErr) throw new Error("БД INSERT: " + insErr.message);
                     profile = newProfile;
+                    addLog('   Профиль создан!');
+                } else {
+                    addLog('2. Профиль найден: ' + profile.username);
                 }
 
-                myData = { color: profile.body_color, hat: profile.hat_type, face: profile.face_type };
+                myData = { color: profile.body_color || '#007AFF', hat: profile.hat_type || 'none', face: profile.face_type || 'none' };
                 myPlayer = createFunkoPop(myData.color, myData.hat, myData.face, true);
                 scene.add(myPlayer);
+                addLog('3. Персонаж создан на сцене.');
 
-                document.getElementById('loading').innerText = "Подключение к миру...";
-                channel = supabase.channel('bellos-world', { config: { presence: { key: myId } } });
+                addLog('4. Подключение к WebSocket (Realtime)...');
+                channel = supabase.channel('bellos-world', { config: { presence: { key: String(myId) } } });
 
                 channel.on('presence', { event: 'sync' }, () => {
                     const state = channel.presenceState();
@@ -215,9 +208,9 @@
                         if (!state[id]) { scene.remove(otherPlayers[id].mesh); delete otherPlayers[id]; }
                     }
                     for (let id in state) {
-                        if (id != myId && !otherPlayers[id]) {
+                        if (id != String(myId) && !otherPlayers[id]) {
                             const p = state[id][0];
-                            const mesh = createFunkoPop(p.color, p.hat, p.face);
+                            const mesh = createFunkoPop(p.color || '#007AFF', p.hat || 'none', p.face || 'none');
                             mesh.position.set(p.x || 0, 0, p.z || 0);
                             scene.add(mesh);
                             otherPlayers[id] = { mesh, targetPos: new THREE.Vector3(p.x || 0, 0, p.z || 0) };
@@ -230,18 +223,25 @@
                 });
 
                 channel.on('broadcast', { event: 'chat' }, payload => {
-                    if (payload.id != myId && otherPlayers[payload.id]) showBubble(otherPlayers[payload.id].mesh, payload.text);
+                    if (payload.id != String(myId) && otherPlayers[payload.id]) showBubble(otherPlayers[payload.id].mesh, payload.text);
                 });
 
+                // Таймаут на случай, если WebSocket молчит
+                const timeout = setTimeout(() => {
+                    addLog('❌ ТАЙМАУТ WebSocket! Проверь, включен ли Realtime в Supabase.');
+                }, 8000);
+
                 await channel.subscribe(async (status) => {
-                    console.log("Статус канала:", status);
+                    addLog('   Статус канала: ' + status);
                     if (status === 'SUBSCRIBED') {
-                        await channel.track({ x: 0, z: 0, ...myData });
-                        document.getElementById('loading').style.display = 'none';
+                        clearTimeout(timeout);
+                        await channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
+                        addLog('✅ УСПЕХ! Игра загружена.');
+                        setTimeout(() => { loader.style.display = 'none'; }, 500);
                     }
                 });
             } catch (e) {
-                window.onerror(e.message);
+                addLog('❌ ОШИБКА: ' + e.message);
             }
         }
 
@@ -291,7 +291,7 @@
             if (input.value.trim() !== '' && channel && myPlayer) {
                 const text = input.value.trim();
                 showBubble(myPlayer, text);
-                channel.send({ type: 'broadcast', event: 'chat', payload: { id: myId, text: text } });
+                channel.send({ type: 'broadcast', event: 'chat', payload: { id: String(myId), text: text } });
                 input.value = '';
             }
         });
@@ -317,25 +317,21 @@
                     myPlayer.rotation.y = Math.atan2(moveX, moveZ);
                 }
 
-                // Отправка координат 10 раз в секунду
                 if (Date.now() - lastBroadcast > 100 && channel) {
                     channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
-                    channel.send({ type: 'broadcast', event: 'move', payload: { id: myId, x: myPlayer.position.x, z: myPlayer.position.z } });
+                    channel.send({ type: 'broadcast', event: 'move', payload: { id: String(myId), x: myPlayer.position.x, z: myPlayer.position.z } });
                     lastBroadcast = Date.now();
                 }
 
-                // Камера
                 camera.position.x = myPlayer.position.x + 20;
                 camera.position.z = myPlayer.position.z + 20;
                 camera.lookAt(myPlayer.position.x, 1, myPlayer.position.z);
             }
 
-            // Плавное движение других
             for (let id in otherPlayers) {
                 otherPlayers[id].mesh.position.lerp(otherPlayers[id].targetPos, 0.1);
             }
 
-            // Облачка
             for (let i = activeBubbles.length - 1; i >= 0; i--) {
                 const b = activeBubbles[i];
                 b.life -= delta;
@@ -348,11 +344,10 @@
             renderer.render(scene, camera);
         }
 
-        // Кастомизация
         window.changeColor = async (color) => {
             myData.color = color; myPlayer.userData.body.material.color.set(color);
             if(channel) channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
-            if(supabase) await supabase.from('profiles').update({ body_color: color }).eq('tg_id', myId);
+            await supabase.from('profiles').update({ body_color: color }).eq('tg_id', myId);
         };
         window.changeHat = async (hat) => {
             myData.hat = hat; scene.remove(myPlayer);
@@ -360,7 +355,7 @@
             myPlayer = createFunkoPop(myData.color, myData.hat, myData.face, true);
             myPlayer.position.copy(pos); scene.add(myPlayer);
             if(channel) channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
-            if(supabase) await supabase.from('profiles').update({ hat_type: hat }).eq('tg_id', myId);
+            await supabase.from('profiles').update({ hat_type: hat }).eq('tg_id', myId);
         };
         window.changeFace = async (face) => {
             myData.face = face; scene.remove(myPlayer);
@@ -368,14 +363,13 @@
             myPlayer = createFunkoPop(myData.color, myData.hat, myData.face, true);
             myPlayer.position.copy(pos); scene.add(myPlayer);
             if(channel) channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
-            if(supabase) await supabase.from('profiles').update({ face_type: face }).eq('tg_id', myId);
+            await supabase.from('profiles').update({ face_type: face }).eq('tg_id', myId);
         };
 
         document.getElementById('btn-customize').addEventListener('click', () => {
             document.getElementById('custom-modal').style.display = 'flex';
         });
 
-        // СТАРТ
         animate();
         initMultiplayer();
     </script>
