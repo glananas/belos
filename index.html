@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Белос - Multiplayer Alpha</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: 'Segoe UI', sans-serif; user-select: none; touch-action: none; }
+        #game-container { width: 100vw; height: 100vh; display: block; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        /* Джойстик */
+        #joystick-zone { position: absolute; bottom: 30px; left: 30px; width: 120px; height: 120px; pointer-events: auto; z-index: 10; }
+        #joystick-base { width: 100%; height: 100%; background: rgba(255,255,255,0.3); border-radius: 50%; position: relative; border: 2px solid rgba(255,255,255,0.6); backdrop-filter: blur(4px); }
+        #joystick-stick { width: 50px; height: 50px; background: rgba(255,255,255,0.9); border-radius: 50%; position: absolute; top: 33px; left: 33px; pointer-events: none; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+        
+        /* Кнопки UI */
+        #top-buttons { position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; pointer-events: auto; z-index: 10; }
+        .icon-btn { background: rgba(255,255,255,0.8); border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        
+        /* Чат */
+        #chat-container { position: absolute; bottom: 30px; right: 20px; width: calc(100% - 180px); max-width: 350px; display: flex; gap: 10px; pointer-events: auto; z-index: 10; }
+        #chat-input { flex-grow: 1; padding: 12px; border-radius: 20px; border: none; background: rgba(255,255,255,0.9); outline: none; font-size: 16px; }
+        #btn-send { background: #007AFF; color: white; border: none; border-radius: 50%; width: 45px; height: 45px; font-size: 20px; cursor: pointer; }
+
+        /* Облачка */
+        .speech-bubble { position: absolute; background: white; padding: 8px 12px; border-radius: 15px; font-size: 14px; color: #333; max-width: 200px; word-wrap: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transform: translate(-50%, -100%); pointer-events: none; border: 2px solid #007AFF; }
+        .speech-bubble.npc-bubble { border-color: #FF3B30; }
+        
+        /* Модалки */
+        .modal { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 100; pointer-events: auto; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 15px; width: 80%; max-width: 400px; }
+        .custom-row { margin-bottom: 15px; }
+        .color-btn { width: 30px; height: 30px; border-radius: 50%; border: 2px solid #ccc; cursor: pointer; margin-right: 5px; display: inline-block; }
+        .option-btn { padding: 5px 10px; margin: 2px; border: 1px solid #ccc; background: #f0f0f0; cursor: pointer; border-radius: 5px; }
+
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; color: white; font-weight: bold; z-index: 200; text-align: center; background: rgba(0,0,0,0.5); padding: 20px; border-radius: 10px; }
+        #error-box { display: none; position: absolute; top: 10px; left: 10px; right: 10px; background: rgba(255, 0, 0, 0.9); color: white; padding: 15px; border-radius: 8px; z-index: 999; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <div id="error-box"></div>
+    <div id="loading">Загрузка Белоса...</div>
+    <div id="game-container"></div>
+    
+    <div id="ui-layer">
+        <div id="joystick-zone"><div id="joystick-base"><div id="joystick-stick"></div></div></div>
+        <div id="top-buttons"><button class="icon-btn" id="btn-customize">🎩</button></div>
+        <div id="chat-container">
+            <input type="text" id="chat-input" placeholder="Сказать..." autocomplete="off">
+            <button id="btn-send">↑</button>
+        </div>
+    </div>
+
+    <div id="bubbles-container" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:hidden;"></div>
+
+    <!-- Модалка кастомизации -->
+    <div class="modal" id="custom-modal">
+        <div class="modal-content">
+            <h3>Смешная кастомизация</h3>
+            <div class="custom-row">
+                <div>Цвет тела:</div>
+                <div class="color-btn" style="background:#007AFF" onclick="changeColor('#007AFF')"></div>
+                <div class="color-btn" style="background:#FF3B30" onclick="changeColor('#FF3B30')"></div>
+                <div class="color-btn" style="background:#4CD964" onclick="changeColor('#4CD964')"></div>
+                <div class="color-btn" style="background:#FFCC00" onclick="changeColor('#FFCC00')"></div>
+            </div>
+            <div class="custom-row">
+                <div>Головной убор:</div>
+                <button class="option-btn" onclick="changeHat('none')">Нет</button>
+                <button class="option-btn" onclick="changeHat('tophat')">Цилиндр</button>
+                <button class="option-btn" onclick="changeHat('horns')">Рога</button>
+            </div>
+            <div class="custom-row">
+                <div>Лицо:</div>
+                <button class="option-btn" onclick="changeFace('none')">Нет</button>
+                <button class="option-btn" onclick="changeFace('clown')">Нос клоуна</button>
+                <button class="option-btn" onclick="changeFace('glasses')">Очки</button>
+            </div>
+            <button onclick="document.getElementById('custom-modal').style.display='none'" style="width:100%; padding:10px; background:#333; color:white; border:none; border-radius:5px;">Готово</button>
+        </div>
+    </div>
+
+    <script>
+        // === ВСТАВЬ СВОИ КЛЮЧИ СЮДА ===
+        const SUPABASE_URL = 'https://dwfwgikrrzavphhuxctq.supabase.co';
+        const SUPABASE_KEY = 'sb_secret_w_ATzad0wwkYyvYP-nYUfA_sOGWknyg';
+
+        // Отладка на экране
+        window.onerror = function(msg) {
+            const err = document.getElementById('error-box');
+            err.style.display = 'block';
+            err.innerText = 'ОШИБКА: ' + msg;
+            document.getElementById('loading').style.display = 'none';
+        };
+
+        const tg = window.Telegram?.WebApp;
+        if (tg) { tg.ready(); tg.expand(); }
+        const tgUser = tg?.initDataUnsafe?.user || { id: 123456, username: "Guest" };
+        
+        const myId = tgUser.id;
+        const ADMIN_ID = 1041188721; // ВПИШИ СВОЙ ID
+        const isAdmin = myId === ADMIN_ID;
+
+        let supabase = null;
+        if (SUPABASE_URL.includes('ТВОЙ_ПРОЕКТ')) {
+            document.getElementById('loading').innerText = "ОШИБКА: Вставь ключи Supabase в код!";
+        } else {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+
+        // === THREE.JS ===
+        const container = document.getElementById('game-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); 
+        scene.fog = new THREE.Fog(0x87CEEB, 30, 80); 
+        const camera = new THREE.OrthographicCamera(-15 * (window.innerWidth/window.innerHeight), 15 * (window.innerWidth/window.innerHeight), 15, -15, 1, 1000);
+        camera.position.set(20, 20, 20);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(10, 20, 10); dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), new THREE.MeshStandardMaterial({ color: 0x7CB342 }));
+        ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+        // Дома
+        const houses = [];
+        const houseColors = [0xE53935, 0x1E88E5, 0x43A047, 0xFDD835, 0x8E24AA, 0xFB8C00, 0x00ACC1, 0x6D4C41, 0xEC407A];
+        for(let i=0; i<9; i++) {
+            const angle = (i / 9) * Math.PI * 2;
+            const x = Math.cos(angle) * 18; const z = Math.sin(angle) * 18;
+            const hg = new THREE.Group();
+            hg.add(new THREE.Mesh(new THREE.BoxGeometry(4, 3, 4), new THREE.MeshStandardMaterial({ color: 0xFFF3E0 })));
+            const roof = new THREE.Mesh(new THREE.ConeGeometry(3.5, 2, 4), new THREE.MeshStandardMaterial({ color: houseColors[i] }));
+            roof.position.y = 2.5; roof.rotation.y = Math.PI / 4; roof.castShadow = true;
+            hg.children[0].position.y = 1.5; hg.children[0].castShadow = true;
+            hg.add(roof); hg.position.set(x, 0, z); scene.add(hg); houses.push(hg);
+        }
+
+        // Персонажи
+        let myPlayer = null;
+        const otherPlayers = {};
+        let myData = { color: '#007AFF', hat: 'none', face: 'none' };
+
+        function createFunkoPop(color, hat, face, isMe = false) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 1.2, 16), new THREE.MeshStandardMaterial({ color: color }));
+            body.position.y = 0.6; body.castShadow = true;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 32, 32), new THREE.MeshStandardMaterial({ color: 0xFFCCAA }));
+            head.position.y = 1.8; head.castShadow = true;
+            group.add(body, head);
+
+            if (hat === 'tophat') {
+                const h = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.8, 16), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+                h.position.y = 2.6; h.castShadow = true; group.add(h);
+            } else if (hat === 'horns') {
+                const h1 = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.5), new THREE.MeshStandardMaterial({ color: 0xFF0000 })); h1.position.set(-0.4, 2.5, 0); group.add(h1);
+                const h2 = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.5), new THREE.MeshStandardMaterial({ color: 0xFF0000 })); h2.position.set(0.4, 2.5, 0); group.add(h2);
+            } else if (isAdmin) {
+                const c = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 5), new THREE.MeshStandardMaterial({ color: 0xFFD700, metalness: 0.8 }));
+                c.position.y = 2.6; group.add(c);
+            }
+            if (face === 'clown') {
+                const n = new THREE.Mesh(new THREE.SphereGeometry(0.15), new THREE.MeshStandardMaterial({ color: 0xFF0000 }));
+                n.position.set(0, 1.8, 0.8); group.add(n);
+            } else if (face === 'glasses') {
+                const gMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+                const g1 = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 16), gMat); g1.position.set(-0.3, 1.9, 0.7); group.add(g1);
+                const g2 = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.05, 8, 16), gMat); g2.position.set(0.3, 1.9, 0.7); group.add(g2);
+            }
+            group.userData = { head, body };
+            return group;
+        }
+
+        // === МУЛЬТИПЛЕЕР ===
+        let channel = null;
+        async function initMultiplayer() {
+            if (!supabase) return;
+
+            try {
+                document.getElementById('loading').innerText = "Подключение к БД...";
+                let { data: profile, error } = await supabase.from('profiles').select('*').eq('tg_id', myId).single();
+                
+                if (error && error.code !== 'PGRST116') throw new Error("Ошибка БД: " + error.message);
+
+                if (!profile) {
+                    const { data: newProfile, error: insErr } = await supabase.from('profiles').insert([{ 
+                        tg_id: myId, username: tgUser.username || 'Player', is_admin: isAdmin
+                    }]).select().single();
+                    if (insErr) throw new Error("Ошибка создания профиля: " + insErr.message);
+                    profile = newProfile;
+                }
+
+                myData = { color: profile.body_color, hat: profile.hat_type, face: profile.face_type };
+                myPlayer = createFunkoPop(myData.color, myData.hat, myData.face, true);
+                scene.add(myPlayer);
+
+                document.getElementById('loading').innerText = "Подключение к миру...";
+                channel = supabase.channel('bellos-world', { config: { presence: { key: myId } } });
+
+                channel.on('presence', { event: 'sync' }, () => {
+                    const state = channel.presenceState();
+                    for (let id in otherPlayers) {
+                        if (!state[id]) { scene.remove(otherPlayers[id].mesh); delete otherPlayers[id]; }
+                    }
+                    for (let id in state) {
+                        if (id != myId && !otherPlayers[id]) {
+                            const p = state[id][0];
+                            const mesh = createFunkoPop(p.color, p.hat, p.face);
+                            mesh.position.set(p.x || 0, 0, p.z || 0);
+                            scene.add(mesh);
+                            otherPlayers[id] = { mesh, targetPos: new THREE.Vector3(p.x || 0, 0, p.z || 0) };
+                        }
+                    }
+                });
+
+                channel.on('broadcast', { event: 'move' }, payload => {
+                    if (otherPlayers[payload.id]) otherPlayers[payload.id].targetPos.set(payload.x, 0, payload.z);
+                });
+
+                channel.on('broadcast', { event: 'chat' }, payload => {
+                    if (payload.id != myId && otherPlayers[payload.id]) showBubble(otherPlayers[payload.id].mesh, payload.text);
+                });
+
+                await channel.subscribe(async (status) => {
+                    console.log("Статус канала:", status);
+                    if (status === 'SUBSCRIBED') {
+                        await channel.track({ x: 0, z: 0, ...myData });
+                        document.getElementById('loading').style.display = 'none';
+                    }
+                });
+            } catch (e) {
+                window.onerror(e.message);
+            }
+        }
+
+        // === УПРАВЛЕНИЕ ===
+        const keys = { w: false, a: false, s: false, d: false };
+        let joystickVec = new THREE.Vector2(0, 0);
+        
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'w' || e.key === 'ArrowUp') keys.w = true;
+            if (e.key === 's' || e.key === 'ArrowDown') keys.s = true;
+            if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = true;
+            if (e.key === 'd' || e.key === 'ArrowRight') keys.d = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'w' || e.key === 'ArrowUp') keys.w = false;
+            if (e.key === 's' || e.key === 'ArrowDown') keys.s = false;
+            if (e.key === 'a' || e.key === 'ArrowLeft') keys.a = false;
+            if (e.key === 'd' || e.key === 'ArrowRight') keys.d = false;
+        });
+
+        const zone = document.getElementById('joystick-zone');
+        const stick = document.getElementById('joystick-stick');
+        let isDragging = false;
+        zone.addEventListener('pointerdown', (e) => { isDragging = true; updateStick(e); });
+        document.addEventListener('pointermove', (e) => { if (isDragging) updateStick(e); });
+        document.addEventListener('pointerup', () => { isDragging = false; stick.style.transform = `translate(0,0)`; joystickVec.set(0,0); });
+        function updateStick(e) {
+            const rect = zone.getBoundingClientRect();
+            let dx = e.clientX - (rect.left + rect.width/2); let dy = e.clientY - (rect.top + rect.height/2);
+            const dist = Math.sqrt(dx*dx + dy*dy); const max = 35;
+            if (dist > max) { dx = (dx/dist)*max; dy = (dy/dist)*max; }
+            stick.style.transform = `translate(${dx}px, ${dy}px)`;
+            joystickVec.set(dx/max, dy/max);
+        }
+
+        // === ЧАТ ===
+        let activeBubbles = [];
+        function showBubble(targetObj, text) {
+            const div = document.createElement('div');
+            div.className = `speech-bubble`;
+            div.innerText = text;
+            document.getElementById('bubbles-container').appendChild(div);
+            activeBubbles.push({ div, targetObj, life: 4.0 });
+        }
+        document.getElementById('btn-send').addEventListener('click', () => {
+            const input = document.getElementById('chat-input');
+            if (input.value.trim() !== '' && channel && myPlayer) {
+                const text = input.value.trim();
+                showBubble(myPlayer, text);
+                channel.send({ type: 'broadcast', event: 'chat', payload: { id: myId, text: text } });
+                input.value = '';
+            }
+        });
+
+        // === ИГРОВОЙ ЦИКЛ ===
+        const clock = new THREE.Clock();
+        let lastBroadcast = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            if (myPlayer) {
+                let moveX = 0; let moveZ = 0;
+                if (keys.w) moveZ -= 1; if (keys.s) moveZ += 1;
+                if (keys.a) moveX -= 1; if (keys.d) moveX += 1;
+                if (joystickVec.length() > 0.1) { moveX = joystickVec.x; moveZ = joystickVec.y; }
+
+                const isMoving = moveX !== 0 || moveZ !== 0;
+                if (isMoving) {
+                    const len = Math.sqrt(moveX*moveX + moveZ*moveZ);
+                    myPlayer.position.x += (moveX/len) * 0.15;
+                    myPlayer.position.z += (moveZ/len) * 0.15;
+                    myPlayer.rotation.y = Math.atan2(moveX, moveZ);
+                }
+
+                // Отправка координат 10 раз в секунду
+                if (Date.now() - lastBroadcast > 100 && channel) {
+                    channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
+                    channel.send({ type: 'broadcast', event: 'move', payload: { id: myId, x: myPlayer.position.x, z: myPlayer.position.z } });
+                    lastBroadcast = Date.now();
+                }
+
+                // Камера
+                camera.position.x = myPlayer.position.x + 20;
+                camera.position.z = myPlayer.position.z + 20;
+                camera.lookAt(myPlayer.position.x, 1, myPlayer.position.z);
+            }
+
+            // Плавное движение других
+            for (let id in otherPlayers) {
+                otherPlayers[id].mesh.position.lerp(otherPlayers[id].targetPos, 0.1);
+            }
+
+            // Облачка
+            for (let i = activeBubbles.length - 1; i >= 0; i--) {
+                const b = activeBubbles[i];
+                b.life -= delta;
+                if (b.life <= 0) { b.div.remove(); activeBubbles.splice(i, 1); continue; }
+                const pos = b.targetObj.position.clone(); pos.y += 2.8; pos.project(camera);
+                b.div.style.left = `${(pos.x * 0.5 + 0.5) * window.innerWidth}px`;
+                b.div.style.top = `${(-(pos.y * 0.5) + 0.5) * window.innerHeight}px`;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Кастомизация
+        window.changeColor = async (color) => {
+            myData.color = color; myPlayer.userData.body.material.color.set(color);
+            if(channel) channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
+            if(supabase) await supabase.from('profiles').update({ body_color: color }).eq('tg_id', myId);
+        };
+        window.changeHat = async (hat) => {
+            myData.hat = hat; scene.remove(myPlayer);
+            const pos = myPlayer.position.clone();
+            myPlayer = createFunkoPop(myData.color, myData.hat, myData.face, true);
+            myPlayer.position.copy(pos); scene.add(myPlayer);
+            if(channel) channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
+            if(supabase) await supabase.from('profiles').update({ hat_type: hat }).eq('tg_id', myId);
+        };
+        window.changeFace = async (face) => {
+            myData.face = face; scene.remove(myPlayer);
+            const pos = myPlayer.position.clone();
+            myPlayer = createFunkoPop(myData.color, myData.hat, myData.face, true);
+            myPlayer.position.copy(pos); scene.add(myPlayer);
+            if(channel) channel.track({ x: myPlayer.position.x, z: myPlayer.position.z, ...myData });
+            if(supabase) await supabase.from('profiles').update({ face_type: face }).eq('tg_id', myId);
+        };
+
+        document.getElementById('btn-customize').addEventListener('click', () => {
+            document.getElementById('custom-modal').style.display = 'flex';
+        });
+
+        // СТАРТ
+        animate();
+        initMultiplayer();
+    </script>
+</body>
+</html>
